@@ -1,4 +1,44 @@
-<!DOCTYPE html>
+
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -32,7 +72,7 @@
       background: rgba(229, 231, 235, 0.5);
     }
     .experiment-section {
-      background: rgba(219, 234, 254, 0.5);
+      background: rgba(237, 233, 254, 0.5);
     }
     .reset-button {
       transition: background-color 0.2s ease, transform 0.2s ease;
@@ -51,6 +91,9 @@
       }
       .flex-row > div {
         width: 100%;
+      }
+      .grid-cols-2 {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -104,13 +147,17 @@
         <!-- Duration and Sampling Frequency -->
         <div class="flex flex-row gap-4">
           <div class="input-group flex-1">
-            <label for="duration" class="block text-sm font-medium text-gray-700 mb-1">Session Duration</label>
+            <label for="duration" class="block text-sm font-medium text-gray-700 mb-1">Duration</label>
             <div class="flex items-center gap-4">
               <input type="number" id="duration" value="1" min="0.1" step="0.1" class="block w-full p-3 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
               <div class="flex space-x-2">
                 <label class="flex items-center">
                   <input type="radio" name="durationUnit" value="hours" checked class="mr-1">
                   <span class="text-sm text-gray-600">Hours</span>
+                </label>
+                <label class="flex items-center">
+                  <input type="radio" name="durationUnit" value="minutes" class="mr-1">
+                  <span class="text-sm text-gray-600">Minutes</span>
                 </label>
                 <label class="flex items-center">
                   <input type="radio" name="durationUnit" value="seconds" class="mr-1">
@@ -127,8 +174,34 @@
         </div>
         <!-- Compression Factor -->
         <div class="input-group">
-          <label for="compression" class="block text-sm font-medium text-gray-700 mb-1">Compression Factor (e.g., 2 for 1:2)</label>
-          <input type="number" id="compression" value="1" min="1" step="0.1" class="block w-full p-3 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Compression Factor</label>
+          <div class="flex flex-wrap gap-3">
+            <label class="flex items-center">
+              <input type="radio" name="compressionOption" value="1" checked class="mr-1">
+              <span class="text-sm text-gray-600">1x</span>
+            </label>
+            <label class="flex items-center">
+              <input type="radio" name="compressionOption" value="1.5" class="mr-1">
+              <span class="text-sm text-gray-600">1.5x</span>
+            </label>
+            <label class="flex items-center">
+              <input type="radio" name="compressionOption" value="2" class="mr-1">
+              <span class="text-sm text-gray-600">2x</span>
+            </label>
+            <label class="flex items-center">
+              <input type="radio" name="compressionOption" value="2.5" class="mr-1">
+              <span class="text-sm text-gray-600">2.5x</span>
+            </label>
+            <label class="flex items-center">
+              <input type="radio" name="compressionOption" value="3" class="mr-1">
+              <span class="text-sm text-gray-600">3x</span>
+            </label>
+            <label class="flex items-center">
+              <input type="radio" name="compressionOption" value="custom" class="mr-1">
+              <span class="text-sm text-gray-600">Custom</span>
+            </label>
+            <input type="number" id="compressionCustom" value="1" min="1" step="0.1" disabled class="w-24 p-2 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          </div>
         </div>
       </div>
     </div>
@@ -153,19 +226,45 @@
         </h3>
         <p class="text-gray-700 mt-2"><span id="numFiles">0</span> (at <span id="fileSizeDisplay">128</span> KB each)</p>
       </div>
-      <div class="result-card p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-100">
+      <div class="result-card p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-100 sm:col-span-2">
         <h3 class="text-md font-semibold text-gray-800 flex items-center">
           <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-          Transfer Time (No Compression)
+          Transfer Time
         </h3>
-        <p class="text-gray-700 mt-2"><span id="transferTimeNoComp">0</span> seconds</p>
+        <div class="flex space-x-4 mt-2">
+          <label class="flex items-center">
+            <input type="radio" name="timeUnit" value="seconds" checked class="mr-1">
+            <span class="text-sm text-gray-600">Seconds</span>
+          </label>
+          <label class="flex items-center">
+            <input type="radio" name="timeUnit" value="minutes" class="mr-1">
+            <span class="text-sm text-gray-600">Minutes</span>
+          </label>
+        </div>
+        <p class="text-gray-700 mt-2">No Compression: <span id="transferTimeNoComp">0</span> <span id="transferTimeNoCompUnit">seconds</span></p>
+        <p class="text-gray-700 mt-1">With Compression: <span id="transferTimeComp">0</span> <span id="transferTimeCompUnit">seconds</span></p>
       </div>
-      <div class="result-card p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-100">
+      <div class="result-card p-4 bg-gradient-to-br from-green-50 to-teal-100 rounded-xl border border-green-100">
         <h3 class="text-md font-semibold text-gray-800 flex items-center">
-          <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-          Transfer Time (With Compression)
+          <svg class="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          Team Download Time
         </h3>
-        <p class="text-gray-700 mt-2"><span id="transferTimeComp">0</span> seconds</p>
+        <div class="input-group mb-2">
+          <label for="numUsers" class="block text-sm font-medium text-gray-700 mb-1">Users</label>
+          <input type="number" id="numUsers" value="20" min="1" step="1" class="block w-20 p-2 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div class="flex space-x-4 mb-2">
+          <label class="flex items-center">
+            <input type="radio" name="teamTimeUnit" value="seconds" checked class="mr-1">
+            <span class="text-sm text-gray-600">Seconds</span>
+          </label>
+          <label class="flex items-center">
+            <input type="radio" name="teamTimeUnit" value="minutes" class="mr-1">
+            <span class="text-sm text-gray-600">Minutes</span>
+          </label>
+        </div>
+        <p class="text-gray-700">No Compression: <span id="teamTimeNoComp">0</span> <span id="teamTimeNoCompUnit">seconds</span></p>
+        <p class="text-gray-700 mt-1">With Compression: <span id="teamTimeComp">0</span> <span id="teamTimeCompUnit">seconds</span></p>
       </div>
     </div>
   </div>
@@ -174,21 +273,43 @@
     const fullMemory = 134217728; // 128 MB in bytes
 
     function calculate() {
-      // Get input values
-      const sampleSize = parseFloat(document.getElementById('sampleSize').value) || 1;
-      const fileSize = parseFloat(document.getElementById('fileSize').value) || 1;
-      let bleSpeed = parseFloat(document.getElementById('bleSpeed').value) || 0.1;
-      const bleUnit = document.querySelector('input[name="bleUnit"]:checked').value;
-      const frequency = parseFloat(document.getElementById('frequency').value) || 1;
-      const durationInput = parseFloat(document.getElementById('duration').value) || 0.1;
-      const durationUnit = document.querySelector('input[name="durationUnit"]:checked').value;
-      const compression = parseFloat(document.getElementById('compression').value) || 1;
+      // Get input elements with null checks
+      const sampleSizeInput = document.getElementById('sampleSize');
+      const fileSizeInput = document.getElementById('fileSize');
+      const bleSpeedInput = document.getElementById('bleSpeed');
+      const frequencyInput = document.getElementById('frequency');
+      const durationInput = document.getElementById('duration');
+      const compressionCustomInput = document.getElementById('compressionCustom');
+      const numUsersInput = document.getElementById('numUsers');
+
+      // Validate inputs
+      if (!sampleSizeInput || !fileSizeInput || !bleSpeedInput || !frequencyInput || !durationInput || !compressionCustomInput || !numUsersInput) {
+        console.error('One or more input elements not found');
+        return;
+      }
+
+      // Parse input values with fallbacks and validation
+      const sampleSize = Math.max(parseFloat(sampleSizeInput.value) || 1, 1);
+      const fileSize = Math.max(parseFloat(fileSizeInput.value) || 1, 1);
+      let bleSpeed = Math.max(parseFloat(bleSpeedInput.value) || 0.1, 0.1);
+      const frequency = Math.max(parseFloat(frequencyInput.value) || 1, 1);
+      const durationInputValue = Math.max(parseFloat(durationInput.value) || 0.1, 0.1);
+      const compressionOption = document.querySelector('input[name="compressionOption"]:checked')?.value || '1';
+      const compression = compressionOption === 'custom' ? Math.max(parseFloat(compressionCustomInput.value) || 1, 1) : parseFloat(compressionOption);
+      const numUsers = Math.max(parseInt(numUsersInput.value) || 1, 1);
+
+      // Get radio button values
+      const bleUnit = document.querySelector('input[name="bleUnit"]:checked')?.value || 'KBps';
+      const durationUnit = document.querySelector('input[name="durationUnit"]:checked')?.value || 'hours';
+      const timeUnit = document.querySelector('input[name="timeUnit"]:checked')?.value || 'seconds';
+      const teamTimeUnit = document.querySelector('input[name="teamTimeUnit"]:checked')?.value || 'seconds';
 
       // Convert BLE speed to KBps
       bleSpeed = bleUnit === 'MBps' ? bleSpeed * 1024 : bleSpeed;
 
       // Convert duration to seconds
-      const duration = durationUnit === 'hours' ? durationInput * 3600 : durationInput;
+      const duration = durationUnit === 'hours' ? durationInputValue * 3600 :
+                      durationUnit === 'minutes' ? durationInputValue * 60 : durationInputValue;
 
       // Calculate total data
       const totalSamples = frequency * duration;
@@ -199,9 +320,21 @@
       const blockSize = fileSize * 1024; // KB to bytes
       const numFiles = Math.ceil(totalDataBytes / blockSize);
 
-      // Calculate transfer times
-      const transferTimeNoComp = totalDataBytes / (bleSpeed * 1024); // KBps to bytes/s
-      const transferTimeComp = (totalDataBytes / compression) / (bleSpeed * 1024);
+      // Calculate transfer times (in seconds)
+      const transferTimeNoCompSec = totalDataBytes / (bleSpeed * 1024); // KBps to bytes/s
+      const transferTimeCompSec = (totalDataBytes / compression) / (bleSpeed * 1024);
+
+      // Convert transfer times based on unit
+      const transferTimeNoComp = timeUnit === 'minutes' ? transferTimeNoCompSec / 60 : transferTimeNoCompSec;
+      const transferTimeComp = timeUnit === 'minutes' ? transferTimeCompSec / 60 : transferTimeCompSec;
+      const timeUnitLabel = timeUnit === 'minutes' ? 'minutes' : 'seconds';
+
+      // Calculate team download times (in seconds, then convert)
+      const teamTimeNoCompSec = numUsers * transferTimeNoCompSec;
+      const teamTimeCompSec = numUsers * transferTimeCompSec;
+      const teamTimeNoComp = teamTimeUnit === 'minutes' ? teamTimeNoCompSec / 60 : teamTimeNoCompSec;
+      const teamTimeComp = teamTimeUnit === 'minutes' ? teamTimeCompSec / 60 : teamTimeCompSec;
+      const teamTimeUnitLabel = teamTimeUnit === 'minutes' ? 'minutes' : 'seconds';
 
       // Calculate memory usage
       const memoryPercent = (totalDataBytes / fullMemory) * 100;
@@ -210,75 +343,140 @@
       const maxHours = fullMemory / (sampleSize * frequency * 3600);
 
       // Update results
-      document.getElementById('totalData').textContent = totalDataBytes.toLocaleString();
-      document.getElementById('totalDataMB').textContent = totalDataMB.toFixed(2);
-      document.getElementById('memoryPercent').textContent = memoryPercent.toFixed(2);
-      document.getElementById('memoryBar').style.width = `${Math.min(memoryPercent, 100)}%`;
-      document.getElementById('numFiles').textContent = numFiles.toFixed(2);
-      document.getElementById('fileSizeDisplay').textContent = fileSize.toFixed(2);
-      document.getElementById('maxHours').textContent = maxHours.toFixed(2);
-      document.getElementById('transferTimeNoComp').textContent = transferTimeNoComp.toFixed(2);
-      document.getElementById('transferTimeComp').textContent = transferTimeComp.toFixed(2);
+      const totalDataEl = document.getElementById('totalData');
+      const totalDataMBEl = document.getElementById('totalDataMB');
+      const memoryPercentEl = document.getElementById('memoryPercent');
+      const memoryBarEl = document.getElementById('memoryBar');
+      const numFilesEl = document.getElementById('numFiles');
+      const fileSizeDisplayEl = document.getElementById('fileSizeDisplay');
+      const maxHoursEl = document.getElementById('maxHours');
+      const transferTimeNoCompEl = document.getElementById('transferTimeNoComp');
+      const transferTimeCompEl = document.getElementById('transferTimeComp');
+      const transferTimeNoCompUnitEl = document.getElementById('transferTimeNoCompUnit');
+      const transferTimeCompUnitEl = document.getElementById('transferTimeCompUnit');
+      const teamTimeNoCompEl = document.getElementById('teamTimeNoComp');
+      const teamTimeCompEl = document.getElementById('teamTimeComp');
+      const teamTimeNoCompUnitEl = document.getElementById('teamTimeNoCompUnit');
+      const teamTimeCompUnitEl = document.getElementById('teamTimeCompUnit');
+
+      if (totalDataEl) totalDataEl.textContent = totalDataBytes.toLocaleString();
+      if (totalDataMBEl) totalDataMBEl.textContent = totalDataMB.toFixed(2);
+      if (memoryPercentEl) memoryPercentEl.textContent = memoryPercent.toFixed(2);
+      if (memoryBarEl) memoryBarEl.style.width = `${Math.min(memoryPercent, 100)}%`;
+      if (numFilesEl) numFilesEl.textContent = numFiles.toFixed(2);
+      if (fileSizeDisplayEl) fileSizeDisplayEl.textContent = fileSize.toFixed(2);
+      if (maxHoursEl) maxHoursEl.textContent = maxHours.toFixed(2);
+      if (transferTimeNoCompEl) transferTimeNoCompEl.textContent = transferTimeNoComp.toFixed(2);
+      if (transferTimeCompEl) transferTimeCompEl.textContent = transferTimeComp.toFixed(2);
+      if (transferTimeNoCompUnitEl) transferTimeNoCompUnitEl.textContent = timeUnitLabel;
+      if (transferTimeCompUnitEl) transferTimeCompUnitEl.textContent = timeUnitLabel;
+      if (teamTimeNoCompEl) teamTimeNoCompEl.textContent = teamTimeNoComp.toFixed(2);
+      if (teamTimeCompEl) teamTimeCompEl.textContent = teamTimeComp.toFixed(2);
+      if (teamTimeNoCompUnitEl) teamTimeNoCompUnitEl.textContent = teamTimeUnitLabel;
+      if (teamTimeCompUnitEl) teamTimeCompUnitEl.textContent = teamTimeUnitLabel;
     }
 
     // Handle BLE unit change
     function handleBleUnitChange() {
       const bleSpeedInput = document.getElementById('bleSpeed');
+      if (!bleSpeedInput) return;
       const currentValue = parseFloat(bleSpeedInput.value) || 0.1;
-      const bleUnit = document.querySelector('input[name="bleUnit"]:checked').value;
+      const bleUnit = document.querySelector('input[name="bleUnit"]:checked')?.value || 'KBps';
 
-      // Convert BLE speed when unit changes
-      if (bleUnit === 'MBps') {
-        bleSpeedInput.value = (currentValue / 1024).toFixed(4);
-      } else {
-        bleSpeedInput.value = (currentValue * 1024).toFixed(2);
-      }
+      bleSpeedInput.value = bleUnit === 'MBps' ? (currentValue / 1024).toFixed(4) : (currentValue * 1024).toFixed(2);
       calculate();
     }
 
     // Handle duration unit change
     function handleDurationUnitChange() {
       const durationInput = document.getElementById('duration');
+      if (!durationInput) return;
       const currentValue = parseFloat(durationInput.value) || 0.1;
-      const durationUnit = document.querySelector('input[name="durationUnit"]:checked').value;
+      const newUnit = document.querySelector('input[name="durationUnit"]:checked')?.value || 'hours';
+      const prevUnit = durationInput.dataset.prevUnit || 'hours';
 
-      // Convert duration when unit changes
-      if (durationUnit === 'hours') {
-        durationInput.value = (currentValue / 3600).toFixed(2);
-      } else {
-        durationInput.value = (currentValue * 3600).toFixed(2);
+      let newValue;
+      if (prevUnit === 'hours') {
+        newValue = newUnit === 'minutes' ? currentValue * 60 :
+                   newUnit === 'seconds' ? currentValue * 3600 : currentValue;
+      } else if (prevUnit === 'minutes') {
+        newValue = newUnit === 'hours' ? currentValue / 60 :
+                   newUnit === 'seconds' ? currentValue * 60 : currentValue;
+      } else { // seconds
+        newValue = newUnit === 'hours' ? currentValue / 3600 :
+                   newUnit === 'minutes' ? currentValue / 60 : currentValue;
+      }
+
+      durationInput.value = newUnit === 'hours' ? newValue.toFixed(2) : Math.round(newValue);
+      durationInput.step = newUnit === 'hours' ? '0.1' : '1';
+      durationInput.dataset.prevUnit = newUnit;
+      calculate();
+    }
+
+    // Handle transfer time unit change
+    function handleTimeUnitChange() {
+      calculate();
+    }
+
+    // Handle team time unit change
+    function handleTeamTimeUnitChange() {
+      calculate();
+    }
+
+    // Handle compression option change
+    function handleCompressionOptionChange() {
+      const compressionCustomInput = document.getElementById('compressionCustom');
+      const compressionOption = document.querySelector('input[name="compressionOption"]:checked')?.value || '1';
+      if (compressionCustomInput) {
+        compressionCustomInput.disabled = compressionOption !== 'custom';
       }
       calculate();
     }
 
     // Handle reset technical parameters
     function resetTechnical() {
-      document.getElementById('sampleSize').value = 38;
-      document.getElementById('fileSize').value = 128;
-      document.getElementById('bleSpeed').value = 179.2;
-      document.querySelector('input[name="bleUnit"][value="KBps"]').checked = true;
+      const sampleSizeInput = document.getElementById('sampleSize');
+      const fileSizeInput = document.getElementById('fileSize');
+      const bleSpeedInput = document.getElementById('bleSpeed');
+      const bleUnitKBps = document.querySelector('input[name="bleUnit"][value="KBps"]');
+
+      if (sampleSizeInput) sampleSizeInput.value = 38;
+      if (fileSizeInput) fileSizeInput.value = 128;
+      if (bleSpeedInput) bleSpeedInput.value = 179.2;
+      if (bleUnitKBps) bleUnitKBps.checked = true;
       calculate();
     }
 
-    // Ensure DOM is loaded before running scripts
+    // Add event listeners
     document.addEventListener('DOMContentLoaded', () => {
-      // Add event listeners
-      const numberInputs = document.querySelectorAll('input[type="number"]');
-      numberInputs.forEach(input => {
-        input.addEventListener('input', calculate);
-      });
-      const bleRadioInputs = document.querySelectorAll('input[name="bleUnit"]');
-      bleRadioInputs.forEach(input => {
-        input.addEventListener('change', handleBleUnitChange);
-      });
-      const durationRadioInputs = document.querySelectorAll('input[name="durationUnit"]');
-      durationRadioInputs.forEach(input => {
-        input.addEventListener('change', handleDurationUnitChange);
-      });
-      document.getElementById('resetTechnical').addEventListener('click', resetTechnical);
+      const durationInput = document.getElementById('duration');
+      if (durationInput) durationInput.dataset.prevUnit = 'hours'; // Initialize previous unit
 
-      // Initial calculation
-      calculate();
+      const numberInputs = document.querySelectorAll('input[type="number"]');
+      numberInputs.forEach(input => input.addEventListener('input', calculate));
+
+      const bleRadioInputs = document.querySelectorAll('input[name="bleUnit"]');
+      bleRadioInputs.forEach(input => input.addEventListener('change', handleBleUnitChange));
+
+      const durationRadioInputs = document.querySelectorAll('input[name="durationUnit"]');
+      durationRadioInputs.forEach(input => input.addEventListener('change', handleDurationUnitChange));
+
+      const timeUnitRadioInputs = document.querySelectorAll('input[name="timeUnit"]');
+      timeUnitRadioInputs.forEach(input => input.addEventListener('change', handleTimeUnitChange));
+
+      const teamTimeUnitRadioInputs = document.querySelectorAll('input[name="teamTimeUnit"]');
+      teamTimeUnitRadioInputs.forEach(input => input.addEventListener('change', handleTeamTimeUnitChange));
+
+      const compressionRadioInputs = document.querySelectorAll('input[name="compressionOption"]');
+      compressionRadioInputs.forEach(input => input.addEventListener('change', handleCompressionOptionChange));
+
+      const resetButton = document.getElementById('resetTechnical');
+      if (resetButton) resetButton.addEventListener('click', resetTechnical);
+
+      // Initialize compression input state
+      handleCompressionOptionChange();
+
+      calculate(); // Initial calculation after DOM is loaded
     });
   </script>
 </body>
