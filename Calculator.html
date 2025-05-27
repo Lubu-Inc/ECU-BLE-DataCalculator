@@ -1,44 +1,4 @@
-
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -46,94 +6,56 @@
   <title>ECU & BLE Calculator</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .input-focus { transition: all 0.2s ease; }
+    .input-focus:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+    .card-hover { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+    .glass { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); }
+    .section-bg { background: rgba(229, 231, 235, 0.5); }
+    .compress-bg { background: rgba(240, 253, 244, 0.8); border: 1px solid #bbf7d0; }
+    
+    @media (max-width: 768px) {
+      .mobile-stack { flex-direction: column; }
+      .mobile-stack > div { width: 100%; margin-bottom: 1rem; }
+      .mobile-grid { grid-template-columns: 1fr; }
+      .compression-grid { grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+      .compression-custom { grid-column: span 3; }
     }
-    .input-group input[type="number"] {
-      transition: all 0.2s ease;
-    }
-    .input-group input[type="number"]:focus {
-      border-color: #3b82f6;
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-    }
-    .result-card {
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      backdrop-filter: blur(10px);
-    }
-    .result-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-    }
-    .container {
-      background: rgba(255, 255, 255, 0.9);
-      backdrop-filter: blur(12px);
-    }
-    .technical-section {
-      background: rgba(229, 231, 235, 0.5);
-    }
-    .experiment-section {
-      background: rgba(237, 233, 254, 0.5);
-    }
-    .reset-button {
-      transition: background-color 0.2s ease, transform 0.2s ease;
-    }
-    .reset-button:hover {
-      background-color: #2563eb;
-      transform: translateY(-1px);
-    }
-    .max-storage {
-      font-size: 0.75rem;
-      color: #4b5563;
-    }
-    @media (max-width: 640px) {
-      .flex-row {
-        flex-direction: column;
-      }
-      .flex-row > div {
-        width: 100%;
-      }
-      .grid-cols-2 {
-        grid-template-columns: 1fr;
-      }
+    @media (max-width: 480px) {
+      .compression-grid { grid-template-columns: repeat(2, 1fr); }
+      .compression-custom { grid-column: span 2; }
     }
   </style>
 </head>
-<body class="bg-gradient-to-br from-indigo-100 to-blue-100 flex items-center justify-center min-h-screen p-4">
-  <div class="container p-8 rounded-3xl shadow-2xl w-full max-w-3xl">
-    <h1 class="text-4xl font-extrabold text-gray-900 mb-8 text-center">ECU & BLE Calculator</h1>
+<body class="bg-gradient-to-br from-indigo-100 to-blue-100 flex items-center justify-center min-h-screen p-2 md:p-4">
+  <div class="glass p-4 md:p-8 rounded-3xl shadow-2xl w-full max-w-4xl">
+    <h1 class="text-3xl md:text-4xl font-extrabold text-gray-900 mb-6 md:mb-8 text-center">ECU & BLE Calculator</h1>
     
     <!-- Technical Parameters -->
-    <div class="technical-section p-6 rounded-xl mb-6">
-      <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-semibold text-gray-800">Technical Parameters <span class="text-sm text-gray-500">(Typically Fixed)</span></h2>
-        <button id="resetTechnical" class="reset-button px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">Reset to Defaults</button>
+    <div class="section-bg p-4 md:p-6 rounded-xl mb-6">
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
+        <h2 class="text-lg md:text-xl font-semibold text-gray-800">Technical Parameters <span class="text-sm text-gray-500">(Typically Fixed)</span></h2>
+        <button onclick="resetDefaults()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">Reset to Defaults</button>
       </div>
       <div class="space-y-4">
-        <!-- Sample Size and File Size -->
-        <div class="flex flex-row gap-4">
-          <div class="input-group flex-1">
-            <label for="sampleSize" class="block text-sm font-medium text-gray-600 mb-1">Sample Size (bytes)</label>
-            <input type="number" id="sampleSize" value="38" min="1" step="1" class="block w-full p-3 border border-gray-200 rounded-lg bg-gray-100 text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <div class="flex mobile-stack gap-4">
+          <div class="flex-1">
+            <label class="block text-sm font-medium text-gray-600 mb-1">Sample Size (bytes)</label>
+            <input type="number" id="sampleSize" value="38" min="1" class="input-focus block w-full p-3 border border-gray-200 rounded-lg bg-gray-100 text-gray-600">
           </div>
-          <div class="input-group flex-1">
-            <label for="fileSize" class="block text-sm font-medium text-gray-600 mb-1">File Size (KB)</label>
-            <input type="number" id="fileSize" value="128" min="1" step="1" class="block w-full p-3 border border-gray-200 rounded-lg bg-gray-100 text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <div class="flex-1">
+            <label class="block text-sm font-medium text-gray-600 mb-1">File Size (KB)</label>
+            <input type="number" id="fileSize" value="128" min="1" class="input-focus block w-full p-3 border border-gray-200 rounded-lg bg-gray-100 text-gray-600">
           </div>
         </div>
-        <!-- BLE Speed -->
-        <div class="input-group">
-          <label for="bleSpeed" class="block text-sm font-medium text-gray-600 mb-1">BLE Speed</label>
-          <div class="flex items-center gap-4">
-            <input type="number" id="bleSpeed" value="179.2" min="0.1" step="0.1" class="block w-2/3 p-3 border border-gray-200 rounded-lg bg-gray-100 text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <div class="flex space-x-2">
-              <label class="flex items-center">
-                <input type="radio" name="bleUnit" value="KBps" checked class="mr-1">
-                <span class="text-sm text-gray-600">KBps</span>
-              </label>
-              <label class="flex items-center">
-                <input type="radio" name="bleUnit" value="MBps" class="mr-1">
-                <span class="text-sm text-gray-600">MBps</span>
-              </label>
+        <div>
+          <label class="block text-sm font-medium text-gray-600 mb-1">BLE Speed</label>
+          <div class="flex flex-col md:flex-row items-start md:items-center gap-4">
+            <input type="number" id="bleSpeed" value="179.2" min="0.1" step="0.1" class="input-focus block w-full md:w-2/3 p-3 border border-gray-200 rounded-lg bg-gray-100 text-gray-600">
+            <div class="flex gap-4">
+              <label class="flex items-center"><input type="radio" name="bleUnit" value="KBps" checked class="mr-1"><span class="text-sm text-gray-600">KBps</span></label>
+              <label class="flex items-center"><input type="radio" name="bleUnit" value="MBps" class="mr-1"><span class="text-sm text-gray-600">MBps</span></label>
             </div>
           </div>
         </div>
@@ -141,342 +63,292 @@
     </div>
     
     <!-- Experiment Parameters -->
-    <div class="experiment-section p-6 rounded-xl mb-6">
-      <h2 class="text-xl font-semibold text-gray-800 mb-4">Experiment Parameters <span class="text-sm text-gray-500">(Adjust These)</span></h2>
-      <div class="space-y-4">
-        <!-- Duration and Sampling Frequency -->
-        <div class="flex flex-row gap-4">
-          <div class="input-group flex-1">
-            <label for="duration" class="block text-sm font-medium text-gray-700 mb-1">Duration</label>
-            <div class="flex items-center gap-4">
-              <input type="number" id="duration" value="1" min="0.1" step="0.1" class="block w-full p-3 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <div class="flex space-x-2">
-                <label class="flex items-center">
-                  <input type="radio" name="durationUnit" value="hours" checked class="mr-1">
-                  <span class="text-sm text-gray-600">Hours</span>
-                </label>
-                <label class="flex items-center">
-                  <input type="radio" name="durationUnit" value="minutes" class="mr-1">
-                  <span class="text-sm text-gray-600">Minutes</span>
-                </label>
-                <label class="flex items-center">
-                  <input type="radio" name="durationUnit" value="seconds" class="mr-1">
-                  <span class="text-sm text-gray-600">Seconds</span>
-                </label>
-              </div>
-            </div>
-          </div>
-          <div class="input-group flex-1">
-            <label for="frequency" class="block text-sm font-medium text-gray-700 mb-1">Sampling Frequency (Hz)</label>
-            <input type="number" id="frequency" value="100" min="1" step="1" class="block w-full p-3 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <p class="max-storage mt-1">Max Storage: <span id="maxHours">0</span> hours at 128 MB</p>
+    <div class="section-bg p-4 md:p-6 rounded-xl mb-6" style="background: rgba(237, 233, 254, 0.5);">
+      <h2 class="text-lg md:text-xl font-semibold text-gray-800 mb-4">Experiment Parameters <span class="text-sm text-gray-500">(Adjust These)</span></h2>
+      <div class="flex mobile-stack gap-4">
+        <div class="flex-1">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Duration</label>
+          <input type="number" id="duration" value="1" min="0.1" step="0.1" class="input-focus block w-full p-3 border border-gray-200 rounded-lg bg-white mb-2">
+          <div class="flex gap-4">
+            <label class="flex items-center"><input type="radio" name="durationUnit" value="hours" checked class="mr-1"><span class="text-sm text-gray-600">Hours</span></label>
+            <label class="flex items-center"><input type="radio" name="durationUnit" value="minutes" class="mr-1"><span class="text-sm text-gray-600">Minutes</span></label>
+            <label class="flex items-center"><input type="radio" name="durationUnit" value="seconds" class="mr-1"><span class="text-sm text-gray-600">Seconds</span></label>
           </div>
         </div>
-        <!-- Compression Factor -->
-        <div class="input-group">
-          <label class="block text-sm font-medium text-gray-700 mb-1">Compression Factor</label>
-          <div class="flex flex-wrap gap-3">
-            <label class="flex items-center">
-              <input type="radio" name="compressionOption" value="1" checked class="mr-1">
-              <span class="text-sm text-gray-600">1x</span>
-            </label>
-            <label class="flex items-center">
-              <input type="radio" name="compressionOption" value="1.5" class="mr-1">
-              <span class="text-sm text-gray-600">1.5x</span>
-            </label>
-            <label class="flex items-center">
-              <input type="radio" name="compressionOption" value="2" class="mr-1">
-              <span class="text-sm text-gray-600">2x</span>
-            </label>
-            <label class="flex items-center">
-              <input type="radio" name="compressionOption" value="2.5" class="mr-1">
-              <span class="text-sm text-gray-600">2.5x</span>
-            </label>
-            <label class="flex items-center">
-              <input type="radio" name="compressionOption" value="3" class="mr-1">
-              <span class="text-sm text-gray-600">3x</span>
-            </label>
-            <label class="flex items-center">
-              <input type="radio" name="compressionOption" value="custom" class="mr-1">
-              <span class="text-sm text-gray-600">Custom</span>
-            </label>
-            <input type="number" id="compressionCustom" value="1" min="1" step="0.1" disabled class="w-24 p-2 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-          </div>
+        <div class="flex-1">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Sampling Frequency (Hz)</label>
+          <input type="number" id="frequency" value="100" min="1" class="input-focus block w-full p-3 border border-gray-200 rounded-lg bg-white">
+          <p class="text-xs text-gray-500 mt-1">Max Storage: <span id="maxHours">0</span> hours at 128 MB</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transfer Time & Users -->
+    <div class="flex mobile-stack gap-4 mb-6">
+      <div class="flex-1 p-4 bg-white rounded-xl border border-gray-200">
+        <h3 class="text-md font-semibold text-gray-800 mb-2">Transfer Time Display</h3>
+        <div class="flex gap-4">
+          <label class="flex items-center"><input type="radio" name="timeUnit" value="seconds" checked class="mr-1"><span class="text-sm text-gray-600">Seconds</span></label>
+          <label class="flex items-center"><input type="radio" name="timeUnit" value="minutes" class="mr-1"><span class="text-sm text-gray-600">Minutes</span></label>
+        </div>
+      </div>
+      <div class="flex-1 p-4 bg-white rounded-xl border border-gray-200">
+        <h3 class="text-md font-semibold text-gray-800 mb-2">Team Size</h3>
+        <div class="flex items-center gap-2">
+          <label class="text-sm font-medium text-gray-700">Users:</label>
+          <input type="number" id="numUsers" value="20" min="1" class="input-focus w-20 p-2 border border-gray-200 rounded-lg">
         </div>
       </div>
     </div>
     
     <!-- Results -->
-    <div class="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <div class="result-card p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-100">
-        <h3 class="text-md font-semibold text-gray-800 flex items-center">
-          <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-          Total Data
-        </h3>
-        <p class="text-gray-700 mt-2"><span id="totalData">0</span> bytes (<span id="totalDataMB">0</span> MB)</p>
-        <p class="text-gray-700 mt-2">Memory Usage: <span id="memoryPercent">0</span>% of 128 MB</p>
-        <div class="w-full bg-gray-200 rounded-full h-2.5 mt-2">
-          <div id="memoryBar" class="bg-gradient-to-r from-blue-500 to-indigo-500 h-2.5 rounded-full" style="width: 0%"></div>
+    <div class="space-y-6">
+      <!-- Raw Data -->
+      <div class="card-hover p-6 rounded-xl bg-white border border-gray-200">
+        <div class="flex items-center mb-4">
+          <svg class="w-6 h-6 mr-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+          </svg>
+          <h3 class="text-xl font-bold text-gray-800">Raw Data (Uncompressed)</h3>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-gray-50 p-4 rounded-lg">
+            <h4 class="text-sm font-semibold text-gray-600 mb-2">Total Data</h4>
+            <p class="text-lg font-bold text-gray-800 whitespace-nowrap overflow-hidden"><span id="totalDataMB">0</span> MB</p>
+            <p class="text-sm text-gray-600 whitespace-nowrap overflow-hidden">(<span id="totalData">0</span> bytes)</p>
+          </div>
+          <div class="bg-gray-50 p-4 rounded-lg">
+            <h4 class="text-sm font-semibold text-gray-600 mb-2">Memory Usage</h4>
+            <p class="text-lg font-bold text-gray-800"><span id="memoryPercent">0</span>%</p>
+            <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+              <div id="memoryBar" class="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full" style="width: 0%"></div>
+            </div>
+          </div>
+          <div class="bg-gray-50 p-4 rounded-lg">
+            <h4 class="text-sm font-semibold text-gray-600 mb-2">Files</h4>
+            <p class="text-lg font-bold text-gray-800"><span id="numFiles">0</span></p>
+          </div>
+          <div class="bg-gray-50 p-4 rounded-lg">
+            <h4 class="text-sm font-semibold text-gray-600 mb-2">Transfer Time</h4>
+            <p class="text-lg font-bold text-gray-800"><span id="transferTimeNoComp">0</span> <span id="transferTimeNoCompUnit">sec</span></p>
+          </div>
         </div>
       </div>
-      <div class="result-card p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-100">
-        <h3 class="text-md font-semibold text-gray-800 flex items-center">
-          <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-          Number of Files
-        </h3>
-        <p class="text-gray-700 mt-2"><span id="numFiles">0</span> (at <span id="fileSizeDisplay">128</span> KB each)</p>
+
+      <!-- Compressed Data -->
+      <div class="compress-bg card-hover p-6 rounded-xl">
+        <div class="flex items-center mb-4">
+          <svg class="w-6 h-6 mr-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+          </svg>
+          <h3 class="text-xl font-bold text-gray-800">Compressed Data (BLE Transfer)</h3>
+        </div>
+        
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-3">Compression Factor</label>
+          <div class="flex flex-wrap items-center gap-4">
+            <label class="flex items-center"><input type="radio" name="compressionOption" value="1" checked class="mr-1"><span class="text-sm">1x</span></label>
+            <label class="flex items-center"><input type="radio" name="compressionOption" value="1.5" class="mr-1"><span class="text-sm">1.5x</span></label>
+            <label class="flex items-center"><input type="radio" name="compressionOption" value="2" class="mr-1"><span class="text-sm">2x</span></label>
+            <label class="flex items-center"><input type="radio" name="compressionOption" value="2.5" class="mr-1"><span class="text-sm">2.5x</span></label>
+            <label class="flex items-center"><input type="radio" name="compressionOption" value="3" class="mr-1"><span class="text-sm">3x</span></label>
+            <div class="flex items-center gap-2">
+              <label class="flex items-center"><input type="radio" name="compressionOption" value="custom" class="mr-1"><span class="text-sm">Custom</span></label>
+              <input type="number" id="compressionCustom" value="1" min="1" step="0.1" disabled class="input-focus w-20 p-2 border border-gray-200 rounded-lg bg-white">
+            </div>
+          </div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-white p-4 rounded-lg">
+            <h4 class="text-sm font-semibold text-gray-600 mb-2">Compressed Size</h4>
+            <p class="text-lg font-bold text-green-700"><span id="compressedDataMB">0</span> MB</p>
+          </div>
+          <div class="bg-white p-4 rounded-lg">
+            <h4 class="text-sm font-semibold text-gray-600 mb-2">Storage Saved</h4>
+            <p class="text-lg font-bold text-green-700"><span id="spaceSaved">0</span> MB</p>
+            <p class="text-sm text-gray-600">(<span id="spaceSavedPercent">0</span>%)</p>
+          </div>
+          <div class="bg-white p-4 rounded-lg">
+            <h4 class="text-sm font-semibold text-gray-600 mb-2">Files</h4>
+            <p class="text-lg font-bold text-green-700"><span id="numFilesComp">0</span></p>
+          </div>
+          <div class="bg-white p-4 rounded-lg">
+            <h4 class="text-sm font-semibold text-gray-600 mb-2">Transfer Time</h4>
+            <p class="text-lg font-bold text-green-700"><span id="transferTimeComp">0</span> <span id="transferTimeCompUnit">sec</span></p>
+          </div>
+        </div>
       </div>
-      <div class="result-card p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-100 sm:col-span-2">
-        <h3 class="text-md font-semibold text-gray-800 flex items-center">
-          <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-          Transfer Time
-        </h3>
-        <div class="flex space-x-4 mt-2">
-          <label class="flex items-center">
-            <input type="radio" name="timeUnit" value="seconds" checked class="mr-1">
-            <span class="text-sm text-gray-600">Seconds</span>
-          </label>
-          <label class="flex items-center">
-            <input type="radio" name="timeUnit" value="minutes" class="mr-1">
-            <span class="text-sm text-gray-600">Minutes</span>
-          </label>
+
+      <!-- Team Download Time -->
+      <div class="card-hover p-6 bg-gradient-to-br from-orange-50 to-amber-100 rounded-xl border border-orange-100">
+        <div class="flex items-center mb-4">
+          <svg class="w-6 h-6 mr-3 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+          </svg>
+          <h3 class="text-xl font-bold text-gray-800">Team Download Time</h3>
         </div>
-        <p class="text-gray-700 mt-2">No Compression: <span id="transferTimeNoComp">0</span> <span id="transferTimeNoCompUnit">seconds</span></p>
-        <p class="text-gray-700 mt-1">With Compression: <span id="transferTimeComp">0</span> <span id="transferTimeCompUnit">seconds</span></p>
-      </div>
-      <div class="result-card p-4 bg-gradient-to-br from-green-50 to-teal-100 rounded-xl border border-green-100">
-        <h3 class="text-md font-semibold text-gray-800 flex items-center">
-          <svg class="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-          Team Download Time
-        </h3>
-        <div class="input-group mb-2">
-          <label for="numUsers" class="block text-sm font-medium text-gray-700 mb-1">Users</label>
-          <input type="number" id="numUsers" value="20" min="1" step="1" class="block w-20 p-2 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="bg-white p-4 rounded-lg">
+            <h4 class="text-sm font-semibold text-gray-600 mb-2">Uncompressed</h4>
+            <p class="text-lg font-bold text-orange-700"><span id="teamTimeNoComp">0</span> <span id="teamTimeNoCompUnit">sec</span></p>
+          </div>
+          <div class="bg-white p-4 rounded-lg">
+            <h4 class="text-sm font-semibold text-gray-600 mb-2">Compressed</h4>
+            <p class="text-lg font-bold text-orange-700"><span id="teamTimeComp">0</span> <span id="teamTimeCompUnit">sec</span></p>
+          </div>
         </div>
-        <div class="flex space-x-4 mb-2">
-          <label class="flex items-center">
-            <input type="radio" name="teamTimeUnit" value="seconds" checked class="mr-1">
-            <span class="text-sm text-gray-600">Seconds</span>
-          </label>
-          <label class="flex items-center">
-            <input type="radio" name="teamTimeUnit" value="minutes" class="mr-1">
-            <span class="text-sm text-gray-600">Minutes</span>
-          </label>
-        </div>
-        <p class="text-gray-700">No Compression: <span id="teamTimeNoComp">0</span> <span id="teamTimeNoCompUnit">seconds</span></p>
-        <p class="text-gray-700 mt-1">With Compression: <span id="teamTimeComp">0</span> <span id="teamTimeCompUnit">seconds</span></p>
       </div>
     </div>
   </div>
 
   <script>
-    const fullMemory = 134217728; // 128 MB in bytes
+    const MEMORY = 134217728; // 128 MB
+    const $ = id => document.getElementById(id);
+    const $$ = sel => document.querySelectorAll(sel);
+    const val = id => parseFloat($(id).value) || 0;
+    const checked = name => document.querySelector(`input[name="${name}"]:checked`).value;
+
+    let previousDurationValue = 1;
+    let previousDurationUnit = 'hours';
 
     function calculate() {
-      // Get input elements with null checks
-      const sampleSizeInput = document.getElementById('sampleSize');
-      const fileSizeInput = document.getElementById('fileSize');
-      const bleSpeedInput = document.getElementById('bleSpeed');
-      const frequencyInput = document.getElementById('frequency');
-      const durationInput = document.getElementById('duration');
-      const compressionCustomInput = document.getElementById('compressionCustom');
-      const numUsersInput = document.getElementById('numUsers');
-
-      // Validate inputs
-      if (!sampleSizeInput || !fileSizeInput || !bleSpeedInput || !frequencyInput || !durationInput || !compressionCustomInput || !numUsersInput) {
-        console.error('One or more input elements not found');
-        return;
-      }
-
-      // Parse input values with fallbacks and validation
-      const sampleSize = Math.max(parseFloat(sampleSizeInput.value) || 1, 1);
-      const fileSize = Math.max(parseFloat(fileSizeInput.value) || 1, 1);
-      let bleSpeed = Math.max(parseFloat(bleSpeedInput.value) || 0.1, 0.1);
-      const frequency = Math.max(parseFloat(frequencyInput.value) || 1, 1);
-      const durationInputValue = Math.max(parseFloat(durationInput.value) || 0.1, 0.1);
-      const compressionOption = document.querySelector('input[name="compressionOption"]:checked')?.value || '1';
-      const compression = compressionOption === 'custom' ? Math.max(parseFloat(compressionCustomInput.value) || 1, 1) : parseFloat(compressionOption);
-      const numUsers = Math.max(parseInt(numUsersInput.value) || 1, 1);
-
-      // Get radio button values
-      const bleUnit = document.querySelector('input[name="bleUnit"]:checked')?.value || 'KBps';
-      const durationUnit = document.querySelector('input[name="durationUnit"]:checked')?.value || 'hours';
-      const timeUnit = document.querySelector('input[name="timeUnit"]:checked')?.value || 'seconds';
-      const teamTimeUnit = document.querySelector('input[name="teamTimeUnit"]:checked')?.value || 'seconds';
-
-      // Convert BLE speed to KBps
-      bleSpeed = bleUnit === 'MBps' ? bleSpeed * 1024 : bleSpeed;
-
-      // Convert duration to seconds
-      const duration = durationUnit === 'hours' ? durationInputValue * 3600 :
-                      durationUnit === 'minutes' ? durationInputValue * 60 : durationInputValue;
-
-      // Calculate total data
+      const sampleSize = Math.max(val('sampleSize'), 1);
+      const fileSize = Math.max(val('fileSize'), 1) * 1024; // KB to bytes
+      let bleSpeed = Math.max(val('bleSpeed'), 0.1);
+      const frequency = Math.max(val('frequency'), 1);
+      const durationValue = Math.max(val('duration'), 0.1);
+      const numUsers = Math.max(val('numUsers'), 1);
+      
+      // Unit conversions
+      bleSpeed = checked('bleUnit') === 'MBps' ? bleSpeed * 1024 : bleSpeed;
+      const durationUnit = checked('durationUnit');
+      const duration = durationUnit === 'hours' ? durationValue * 3600 : 
+                      durationUnit === 'minutes' ? durationValue * 60 : durationValue;
+      
+      const compression = checked('compressionOption') === 'custom' ? 
+        Math.max(val('compressionCustom'), 1) : parseFloat(checked('compressionOption'));
+      
+      // Calculations
       const totalSamples = frequency * duration;
-      const totalDataBytes = totalSamples * sampleSize;
-      const totalDataMB = totalDataBytes / (1024 * 1024);
-
-      // Calculate number of files
-      const blockSize = fileSize * 1024; // KB to bytes
-      const numFiles = Math.ceil(totalDataBytes / blockSize);
-
-      // Calculate transfer times (in seconds)
-      const transferTimeNoCompSec = totalDataBytes / (bleSpeed * 1024); // KBps to bytes/s
-      const transferTimeCompSec = (totalDataBytes / compression) / (bleSpeed * 1024);
-
-      // Convert transfer times based on unit
-      const transferTimeNoComp = timeUnit === 'minutes' ? transferTimeNoCompSec / 60 : transferTimeNoCompSec;
-      const transferTimeComp = timeUnit === 'minutes' ? transferTimeCompSec / 60 : transferTimeCompSec;
-      const timeUnitLabel = timeUnit === 'minutes' ? 'minutes' : 'seconds';
-
-      // Calculate team download times (in seconds, then convert)
-      const teamTimeNoCompSec = numUsers * transferTimeNoCompSec;
-      const teamTimeCompSec = numUsers * transferTimeCompSec;
-      const teamTimeNoComp = teamTimeUnit === 'minutes' ? teamTimeNoCompSec / 60 : teamTimeNoCompSec;
-      const teamTimeComp = teamTimeUnit === 'minutes' ? teamTimeCompSec / 60 : teamTimeCompSec;
-      const teamTimeUnitLabel = teamTimeUnit === 'minutes' ? 'minutes' : 'seconds';
-
-      // Calculate memory usage
-      const memoryPercent = (totalDataBytes / fullMemory) * 100;
-
-      // Calculate max storage hours
-      const maxHours = fullMemory / (sampleSize * frequency * 3600);
-
-      // Update results
-      const totalDataEl = document.getElementById('totalData');
-      const totalDataMBEl = document.getElementById('totalDataMB');
-      const memoryPercentEl = document.getElementById('memoryPercent');
-      const memoryBarEl = document.getElementById('memoryBar');
-      const numFilesEl = document.getElementById('numFiles');
-      const fileSizeDisplayEl = document.getElementById('fileSizeDisplay');
-      const maxHoursEl = document.getElementById('maxHours');
-      const transferTimeNoCompEl = document.getElementById('transferTimeNoComp');
-      const transferTimeCompEl = document.getElementById('transferTimeComp');
-      const transferTimeNoCompUnitEl = document.getElementById('transferTimeNoCompUnit');
-      const transferTimeCompUnitEl = document.getElementById('transferTimeCompUnit');
-      const teamTimeNoCompEl = document.getElementById('teamTimeNoComp');
-      const teamTimeCompEl = document.getElementById('teamTimeComp');
-      const teamTimeNoCompUnitEl = document.getElementById('teamTimeNoCompUnit');
-      const teamTimeCompUnitEl = document.getElementById('teamTimeCompUnit');
-
-      if (totalDataEl) totalDataEl.textContent = totalDataBytes.toLocaleString();
-      if (totalDataMBEl) totalDataMBEl.textContent = totalDataMB.toFixed(2);
-      if (memoryPercentEl) memoryPercentEl.textContent = memoryPercent.toFixed(2);
-      if (memoryBarEl) memoryBarEl.style.width = `${Math.min(memoryPercent, 100)}%`;
-      if (numFilesEl) numFilesEl.textContent = numFiles.toFixed(2);
-      if (fileSizeDisplayEl) fileSizeDisplayEl.textContent = fileSize.toFixed(2);
-      if (maxHoursEl) maxHoursEl.textContent = maxHours.toFixed(2);
-      if (transferTimeNoCompEl) transferTimeNoCompEl.textContent = transferTimeNoComp.toFixed(2);
-      if (transferTimeCompEl) transferTimeCompEl.textContent = transferTimeComp.toFixed(2);
-      if (transferTimeNoCompUnitEl) transferTimeNoCompUnitEl.textContent = timeUnitLabel;
-      if (transferTimeCompUnitEl) transferTimeCompUnitEl.textContent = timeUnitLabel;
-      if (teamTimeNoCompEl) teamTimeNoCompEl.textContent = teamTimeNoComp.toFixed(2);
-      if (teamTimeCompEl) teamTimeCompEl.textContent = teamTimeComp.toFixed(2);
-      if (teamTimeNoCompUnitEl) teamTimeNoCompUnitEl.textContent = teamTimeUnitLabel;
-      if (teamTimeCompUnitEl) teamTimeCompUnitEl.textContent = teamTimeUnitLabel;
+      const totalBytes = totalSamples * sampleSize;
+      const totalMB = totalBytes / (1024 * 1024);
+      const compressedBytes = totalBytes / compression;
+      const compressedMB = compressedBytes / (1024 * 1024);
+      
+      const numFiles = Math.ceil(totalBytes / fileSize);
+      const numFilesComp = Math.ceil(compressedBytes / fileSize);
+      
+      const transferSec = totalBytes / (bleSpeed * 1024);
+      const transferCompSec = compressedBytes / (bleSpeed * 1024);
+      
+      const timeUnit = checked('timeUnit');
+      const timeDiv = timeUnit === 'minutes' ? 60 : 1;
+      const timeLabel = timeUnit === 'minutes' ? 'min' : 'sec';
+      
+      const memoryPercent = (totalBytes / MEMORY) * 100;
+      const spaceSaved = totalMB - compressedMB;
+      const spaceSavedPercent = (spaceSaved / totalMB) * 100;
+      const maxHours = MEMORY / (sampleSize * frequency * 3600);
+      
+      const teamTimeSec = numUsers * transferSec;
+      const teamTimeCompSec = numUsers * transferCompSec;
+      
+      // Update DOM
+      const updates = {
+        totalData: totalBytes.toLocaleString(),
+        totalDataMB: totalMB.toFixed(2),
+        memoryPercent: memoryPercent.toFixed(1),
+        numFiles: numFiles,
+        maxHours: maxHours.toFixed(2),
+        transferTimeNoComp: (transferSec / timeDiv).toFixed(2),
+        transferTimeNoCompUnit: timeLabel,
+        compressedDataMB: compressedMB.toFixed(2),
+        spaceSaved: spaceSaved.toFixed(2),
+        spaceSavedPercent: spaceSavedPercent.toFixed(1),
+        numFilesComp: numFilesComp,
+        transferTimeComp: (transferCompSec / timeDiv).toFixed(2),
+        transferTimeCompUnit: timeLabel,
+        teamTimeNoComp: (teamTimeSec / timeDiv).toFixed(2),
+        teamTimeNoCompUnit: timeLabel,
+        teamTimeComp: (teamTimeCompSec / timeDiv).toFixed(2),
+        teamTimeCompUnit: timeLabel
+      };
+      
+      Object.entries(updates).forEach(([id, value]) => {
+        const el = $(id);
+        if (el) el.textContent = value;
+      });
+      
+      $('memoryBar').style.width = Math.min(memoryPercent, 100) + '%';
     }
 
-    // Handle BLE unit change
-    function handleBleUnitChange() {
-      const bleSpeedInput = document.getElementById('bleSpeed');
-      if (!bleSpeedInput) return;
-      const currentValue = parseFloat(bleSpeedInput.value) || 0.1;
-      const bleUnit = document.querySelector('input[name="bleUnit"]:checked')?.value || 'KBps';
-
-      bleSpeedInput.value = bleUnit === 'MBps' ? (currentValue / 1024).toFixed(4) : (currentValue * 1024).toFixed(2);
-      calculate();
-    }
-
-    // Handle duration unit change
     function handleDurationUnitChange() {
-      const durationInput = document.getElementById('duration');
-      if (!durationInput) return;
-      const currentValue = parseFloat(durationInput.value) || 0.1;
-      const newUnit = document.querySelector('input[name="durationUnit"]:checked')?.value || 'hours';
-      const prevUnit = durationInput.dataset.prevUnit || 'hours';
-
+      const currentValue = val('duration');
+      const currentUnit = checked('durationUnit');
+      
+      // Convert from previous unit to seconds
+      let valueInSeconds;
+      if (previousDurationUnit === 'hours') {
+        valueInSeconds = currentValue * 3600;
+      } else if (previousDurationUnit === 'minutes') {
+        valueInSeconds = currentValue * 60;
+      } else {
+        valueInSeconds = currentValue;
+      }
+      
+      // Convert from seconds to new unit
       let newValue;
-      if (prevUnit === 'hours') {
-        newValue = newUnit === 'minutes' ? currentValue * 60 :
-                   newUnit === 'seconds' ? currentValue * 3600 : currentValue;
-      } else if (prevUnit === 'minutes') {
-        newValue = newUnit === 'hours' ? currentValue / 60 :
-                   newUnit === 'seconds' ? currentValue * 60 : currentValue;
-      } else { // seconds
-        newValue = newUnit === 'hours' ? currentValue / 3600 :
-                   newUnit === 'minutes' ? currentValue / 60 : currentValue;
+      if (currentUnit === 'hours') {
+        newValue = valueInSeconds / 3600;
+      } else if (currentUnit === 'minutes') {
+        newValue = valueInSeconds / 60;
+      } else {
+        newValue = valueInSeconds;
       }
-
-      durationInput.value = newUnit === 'hours' ? newValue.toFixed(2) : Math.round(newValue);
-      durationInput.step = newUnit === 'hours' ? '0.1' : '1';
-      durationInput.dataset.prevUnit = newUnit;
+      
+      $('duration').value = newValue.toFixed(currentUnit === 'seconds' ? 0 : 2);
+      previousDurationUnit = currentUnit;
       calculate();
     }
 
-    // Handle transfer time unit change
-    function handleTimeUnitChange() {
+    function resetDefaults() {
+      const defaults = { sampleSize: 38, fileSize: 128, bleSpeed: 179.2, duration: 1, frequency: 100, numUsers: 20 };
+      Object.entries(defaults).forEach(([id, value]) => $(id).value = value);
+      
+      document.querySelector('input[name="bleUnit"][value="KBps"]').checked = true;
+      document.querySelector('input[name="durationUnit"][value="hours"]').checked = true;
+      previousDurationUnit = 'hours';
       calculate();
     }
 
-    // Handle team time unit change
-    function handleTeamTimeUnitChange() {
+    function handleCompressionChange() {
+      const isCustom = checked('compressionOption') === 'custom';
+      $('compressionCustom').disabled = !isCustom;
+      if (isCustom) $('compressionCustom').focus();
       calculate();
     }
 
-    // Handle compression option change
-    function handleCompressionOptionChange() {
-      const compressionCustomInput = document.getElementById('compressionCustom');
-      const compressionOption = document.querySelector('input[name="compressionOption"]:checked')?.value || '1';
-      if (compressionCustomInput) {
-        compressionCustomInput.disabled = compressionOption !== 'custom';
-      }
-      calculate();
-    }
-
-    // Handle reset technical parameters
-    function resetTechnical() {
-      const sampleSizeInput = document.getElementById('sampleSize');
-      const fileSizeInput = document.getElementById('fileSize');
-      const bleSpeedInput = document.getElementById('bleSpeed');
-      const bleUnitKBps = document.querySelector('input[name="bleUnit"][value="KBps"]');
-
-      if (sampleSizeInput) sampleSizeInput.value = 38;
-      if (fileSizeInput) fileSizeInput.value = 128;
-      if (bleSpeedInput) bleSpeedInput.value = 179.2;
-      if (bleUnitKBps) bleUnitKBps.checked = true;
-      calculate();
-    }
-
-    // Add event listeners
+    // Event listeners
     document.addEventListener('DOMContentLoaded', () => {
-      const durationInput = document.getElementById('duration');
-      if (durationInput) durationInput.dataset.prevUnit = 'hours'; // Initialize previous unit
-
-      const numberInputs = document.querySelectorAll('input[type="number"]');
-      numberInputs.forEach(input => input.addEventListener('input', calculate));
-
-      const bleRadioInputs = document.querySelectorAll('input[name="bleUnit"]');
-      bleRadioInputs.forEach(input => input.addEventListener('change', handleBleUnitChange));
-
-      const durationRadioInputs = document.querySelectorAll('input[name="durationUnit"]');
-      durationRadioInputs.forEach(input => input.addEventListener('change', handleDurationUnitChange));
-
-      const timeUnitRadioInputs = document.querySelectorAll('input[name="timeUnit"]');
-      timeUnitRadioInputs.forEach(input => input.addEventListener('change', handleTimeUnitChange));
-
-      const teamTimeUnitRadioInputs = document.querySelectorAll('input[name="teamTimeUnit"]');
-      teamTimeUnitRadioInputs.forEach(input => input.addEventListener('change', handleTeamTimeUnitChange));
-
-      const compressionRadioInputs = document.querySelectorAll('input[name="compressionOption"]');
-      compressionRadioInputs.forEach(input => input.addEventListener('change', handleCompressionOptionChange));
-
-      const resetButton = document.getElementById('resetTechnical');
-      if (resetButton) resetButton.addEventListener('click', resetTechnical);
-
-      // Initialize compression input state
-      handleCompressionOptionChange();
-
-      calculate(); // Initial calculation after DOM is loaded
+      ['sampleSize', 'fileSize', 'bleSpeed', 'duration', 'frequency', 'numUsers', 'compressionCustom']
+        .forEach(id => {
+          $(id).addEventListener('input', calculate);
+          $(id).addEventListener('change', calculate);
+        });
+      
+      ['bleUnit', 'timeUnit', 'compressionOption']
+        .forEach(name => {
+          $$(`input[name="${name}"]`).forEach(radio => {
+            radio.addEventListener('change', name === 'compressionOption' ? handleCompressionChange : calculate);
+          });
+        });
+      
+      $$('input[name="durationUnit"]').forEach(radio => {
+        radio.addEventListener('change', handleDurationUnitChange);
+      });
+      
+      calculate();
     });
   </script>
 </body>
